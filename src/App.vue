@@ -7,7 +7,7 @@ for (let i = 0; i < 1000; i++) {
     data.push({ id: i, value: i })
 }
 let { dataList } = Mock.mock({
-    'dataList|50': [
+    'dataList|500': [
         {
             'id|+1': 1,
             title: '@ctitle',
