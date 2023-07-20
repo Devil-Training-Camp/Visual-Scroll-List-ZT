@@ -190,8 +190,8 @@ onUpdated(() => {
                     :data-index="item.arrPos"
                     class="list-item"
                 >
-                    <p>{{ item.data.id }} : {{ item.data.title }}</p>
-                    <article>{{ item.data.description }}</article>
+                    <!-- 通过插槽，自定义列表显示内容 -->
+                    <slot :record="item.data"></slot>
                 </div>
             </div>
         </div>
@@ -234,10 +234,5 @@ onUpdated(() => {
 .list-item {
     box-sizing: border-box;
     width: 100%;
-    border-bottom: 2px rgb(255, 196, 0) solid;
-    padding: 0 20px 20px;
-}
-.list-item:last-child {
-    border-bottom: none;
 }
 </style>
