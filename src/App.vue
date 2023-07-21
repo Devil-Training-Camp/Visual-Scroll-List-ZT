@@ -49,5 +49,6 @@ html {
 .row_content {
     padding: 30px;
     border-bottom: 2px solid rgb(251, 152, 152);
+    background-color: beige;
 }
 </style>
