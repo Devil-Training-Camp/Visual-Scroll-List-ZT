@@ -87,8 +87,9 @@ const end = computed(() => {
         endPos++
         contentDomTotalHeight += tmpAllData[endPos].height
     }
-    // 因为数组的slice方法是包头不包尾的所以还需要再endPos上+1，才会是预期的元素数量
-    return endPos + 1
+    // 因为数组的slice方法是包头不包尾的所以还需要endPos+1，
+    // 因为存在在某个元素位置开区间滚动的情况，此时该元素不会完全移出视口，onUpdated不会触发，但又使得视口多出了位置，因此要再+1，渲染下一个元素来占满视口区域
+    return endPos + 2
 })
 
 const styleTranslate = computed(() => {
@@ -107,7 +108,8 @@ const onScroll = (evt) => {
     const scrollerContainerDom = evt.target
     if (!scrollerContainerDom) return
 
-    const { scrollTop } = scrollerContainerDom
+    const { scrollTop } = scrollerContainerDom // 首条数据的顶部与视口顶端之间的距离
+
     let idx = 0
     const dataList = state.allData
     let dataItem = dataList[idx]
