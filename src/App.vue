@@ -3,11 +3,11 @@ import FixedHeight from './components/FixedHeight.vue'
 import VirtualList from '@/components/VirtualList.vue'
 import Mock from 'mockjs'
 let data = []
-for (let i = 0; i < 1000; i++) {
+for (let i = 0; i < 500; i++) {
     data.push({ id: i, value: i })
 }
 let { dataList } = Mock.mock({
-    'dataList|500': [
+    'dataList|50000': [
         {
             'id|+1': 1,
             title: '@ctitle',
@@ -15,6 +15,10 @@ let { dataList } = Mock.mock({
         }
     ]
 })
+
+const handleClick = (record) => {
+    console.log('点击了', record.title)
+}
 </script>
 <template>
     <!-- 固定高度的虚拟列表 -->

@@ -1,5 +1,5 @@
 <script  setup>
-import { computed, reactive, ref, onMounted, onUpdated } from 'vue'
+import { computed, reactive, ref, onMounted, onUpdated, nextTick } from 'vue'
 const content = ref(null)
 const listContainer = ref(null)
 const listContent = ref(null)
@@ -30,15 +30,23 @@ const state = reactive({
     start: 0,
     positions: null,
     allData: [], // 全部数据
-    startOffset: 0 // 内容容器的y轴偏移量。当渲染区域第一个元素完全移到了可视区域之外时，重新计算startOffset，将第一个元素移回可视区域
+    startOffset: 0, // 内容容器的y轴偏移量。当渲染区域第一个元素完全移到了可视区域之外时，重新计算startOffset，将第一个元素移回可视区域
+    pillarDomHeight: 0 // 用于撑开滚动容器的高度,allData最后一个元素的endPos值
 })
 
+let positionDataArr = [] // 用非响应式数据存储数据的高度和位置
 // 处理传过来的数据 , 按照预估高度设置元素位置
+// 将数据和dom元素的位置高度信息区分开，避免频繁的响应式数据操作导致卡顿
 const initMergeData = () => {
-    state.allData = props.listData.map((item, index) => {
-        return {
+    props.listData.forEach((item, index) => {
+        state.allData.push({
             // 数据
-            data: item,
+            ...item,
+            // 当前数据处在allData数组的索引位置
+            arrPos: index
+        })
+
+        positionDataArr.push({
             // 当前数据处在allData数组的索引位置
             arrPos: index,
             // 当前数据dom的top位置
@@ -47,23 +55,13 @@ const initMergeData = () => {
             endPos: (index + 1) * props.estimatedItemSize,
             // 当前数据dom的高度(初始值为猜测高度【预估高度】)
             height: props.estimatedItemSize
-        }
+        })
     })
 }
 
 onMounted(() => {
     // 数据初始化
     initMergeData()
-})
-
-/**
- * 柱子节点高度: allData最后一个元素的endPos值
- * 用于撑开滚动容器的高度
- */
-const pillarDomHeight = computed(() => {
-    return state.allData.length > 0
-        ? state.allData[state.allData.length - 1].endPos
-        : 0
 })
 
 // 当前视口高度
@@ -75,14 +73,14 @@ const scrollerContainerRefHeight = computed(() => {
 const end = computed(() => {
     if (!state.allData || state.allData.length <= 0) return 0
 
-    const tmpAllData = state.allData
-    // 将start作为遍历allData的开始位置
+    const tmpAllData = positionDataArr
+    // 将start作为遍历positionDataArr的开始位置
     let endPos = state.start
     // contentDomTotalHeight存放从start位置开始的dom节点总高度
     let contentDomTotalHeight = tmpAllData[endPos].height
     // 获取视口高度
     const viewPortHeight = scrollerContainerRefHeight.value
-    // 从start位置开始遍历allData的同时，统计数据dom节点的累计高度，直至累计高度超过了视口高度
+    // 从start位置开始遍历positionDataArr的同时，统计数据dom节点的累计高度，直至累计高度超过了视口高度
     while (contentDomTotalHeight < viewPortHeight) {
         endPos++
         contentDomTotalHeight += tmpAllData[endPos].height
@@ -111,17 +109,17 @@ const onScroll = (evt) => {
     const { scrollTop } = scrollerContainerDom // 首条数据的顶部与视口顶端之间的距离
 
     let idx = 0
-    const dataList = state.allData
+    const dataList = positionDataArr
     let dataItem = dataList[idx]
     while (dataItem.endPos <= scrollTop) {
         idx++
         dataItem = dataList[idx]
     }
     state.start = idx
-    state.startOffset = state.allData[state.start].startPos
+    state.startOffset = positionDataArr[state.start].startPos
 }
-// DOM更新完毕，重新计算列表元素的位置和高度
-onUpdated(() => {
+
+const updateHeightAndPos = () => {
     // 获取列表的DOM对象
     const contentListDom = listContent.value
     if (!contentListDom) return
@@ -129,17 +127,16 @@ onUpdated(() => {
     //  获取子元素
     const childrenElementArr = contentListDom.children
 
-    const dataList = state.allData
+    const dataList = positionDataArr
     for (let i = 0; i < childrenElementArr.length; i++) {
         const childEle = childrenElementArr[i]
-
-        // 获取当前数据dom节点的数据在allData数组中的索引位置
+        // 获取当前数据dom节点的数据在positionDataArr数组中的索引位置
         const dataIndexStr = childEle.dataset['index']
 
         if (!dataIndexStr) continue
 
         const dataIndex = parseInt(dataIndexStr)
-        // 从allData数据中获取到该数据
+        // 从positionDataArr数据中获取到该数据
         const dataItem = dataList[dataIndex]
         if (!dataItem) continue
 
@@ -172,8 +169,17 @@ onUpdated(() => {
             }
         }
     }
+    state.pillarDomHeight =
+        positionDataArr.length > 0
+            ? positionDataArr[positionDataArr.length - 1].endPos
+            : 0
+}
 
-    state.allData = dataList
+// DOM更新完毕，重新计算列表元素的位置和高度
+onUpdated(() => {
+    nextTick(() => {
+        updateHeightAndPos()
+    })
 })
 </script>
 <template>
@@ -182,18 +188,18 @@ onUpdated(() => {
             <!-- 用于显示滚动条 -->
             <div
                 class="pillarDom"
-                :style="{ height: `${pillarDomHeight}px` }"
+                :style="{ height: `${state.pillarDomHeight}px` }"
             ></div>
             <!-- 数据列表 -->
             <div ref="listContent" class="list-content" :style="styleTranslate">
                 <div
                     v-for="item in renderData"
-                    :key="item.data.id"
+                    :key="item.id"
                     :data-index="item.arrPos"
                     class="list-item"
                 >
                     <!-- 通过插槽，自定义列表显示内容 -->
-                    <slot :record="item.data"></slot>
+                    <slot :record="item"></slot>
                 </div>
             </div>
         </div>
