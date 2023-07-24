@@ -119,25 +119,57 @@ const onScroll = (event) => {
     // 正数或0表示向下滚动
     isPositive = scrollTop - lastScrollTop >= 0
     lastScrollTop = scrollTop
-    let idx = 0
-    const dataList = positionDataArr
-    let dataItem = dataList[idx]
-    while (dataItem.endPos <= scrollTop) {
-        idx++
-        dataItem = dataList[idx]
-    }
-    state.start = idx
-
-    if (!isPositive) {
-        // 向上滚动则需要记录视口第一个元素底部位置与scrollTop之间的偏移量，用于onUpdate中修正scrollTop
-        state.startOffset = positionDataArr[state.start].endPos - scrollTop
-    } else {
-        state.startOffset = 0
-    }
-
+    // let idx = 0
+    // const dataList = positionDataArr
+    // let dataItem = dataList[idx]
+    // while (dataItem.endPos <= scrollTop) {
+    //     idx++
+    //     dataItem = dataList[idx]
+    // }
+    // state.start = idx
+    // if (!isPositive) {
+    //     // 向上滚动则需要记录视口第一个元素底部位置与scrollTop之间的偏移量，用于onUpdate中修正scrollTop
+    //     state.startOffset = positionDataArr[state.start].endPos - scrollTop
+    // } else {
+    //     state.startOffset = 0
+    // }
+    state.start = findStartByBinarySearch(positionDataArr, scrollTop)
+    // 记录视口第一个元素底部位置与scrollTop之间的偏移量，用于onUpdate中修正scrollTop
+    state.startOffset = positionDataArr[state.start].endPos - scrollTop
     const _cacheCount = props.cacheCount
     const realStart = Math.max(0, state.start - _cacheCount)
     state.contentListOffset = positionDataArr[realStart].startPos
+}
+
+// 通过二分查找来获取start值
+function findStartByBinarySearch(_positionDataArr, scrollTop) {
+    let startIdx = 0
+    let endIdx = _positionDataArr.length - 1
+    let resultIdx
+    while (startIdx <= endIdx) {
+        // Math.trunc 去除小数部分，只取整数部分. 取startIdx 到 endIdx的中间索引号
+        const middleIdx = Math.trunc((startIdx + endIdx) / 2)
+        // 获取中间索引号对应元素的位置信息
+        const middleEle = _positionDataArr[middleIdx]
+        // 获取中间索引号对应元素的底部位置
+        const middleEleEndPos = middleEle.endPos
+        if (middleEleEndPos === scrollTop) {
+            // 当前滚动高度等于中间索引号对应元素的底部位置，则start为中间索引号的下一个位置
+            return middleIdx + 1
+        } else if (middleEleEndPos < scrollTop) {
+            // 当前滚动高度大于中间索引号对应元素的底部位置，则调整查找区间为右区间
+            startIdx = middleIdx + 1
+        } else if (middleEleEndPos > scrollTop) {
+            // 当前滚动高度大于中间索引号对应元素的底部位置，则调整查找区间为左区间
+            if (resultIdx === undefined || resultIdx > middleIdx) {
+                // 存储元素 middleEleEndPos>scrollTop 元素的最小数组索引号
+                resultIdx = middleIdx
+            }
+            // 调整查找区间为左区间
+            endIdx = middleIdx - 1
+        }
+    }
+    return resultIdx
 }
 
 const fixScrollTop = () => {
