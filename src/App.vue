@@ -7,7 +7,7 @@ for (let i = 0; i < 500; i++) {
     data.push({ id: i, value: i })
 }
 let { dataList } = Mock.mock({
-    'dataList|50000': [
+    'dataList|500': [
         {
             'id|+1': 1,
             title: '@ctitle',
@@ -17,7 +17,8 @@ let { dataList } = Mock.mock({
 })
 
 const handleClick = (record) => {
-    console.log('点击了', record.title)
+    const msg = `点击了第 ${record.ids} 条数据,标题为：《${record.title}》`
+    console.log(msg)
 }
 </script>
 <template>
@@ -25,7 +26,7 @@ const handleClick = (record) => {
     <!-- <FixedHeight :listData="data" :itemSize="100"> </FixedHeight> -->
 
     <!-- 高度不固定的虚拟列表 -->
-    <VirtualList style="height: 100%; width: 80%" :listData="dataList">
+    <VirtualList style="height: 100%" :listData="dataList">
         <template v-slot="{ record }">
             <div class="row_content" @click="handleClick(record)">
                 <p>{{ record.id }} : {{ record.title }}</p>

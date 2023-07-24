@@ -5,6 +5,10 @@ const listContainer = ref(null)
 const listContent = ref(null)
 const items = ref(null)
 
+let fixingScrollTop = false //是否正在修正scrollTop位置
+let lastScrollTop = 0
+let isPositive = true // 是否向下滚动
+
 const props = defineProps({
     //所有列表数据
     listData: {
@@ -16,22 +20,20 @@ const props = defineProps({
         type: Number,
         default: 100
     },
-    //缓冲区比例
-    bufferScale: {
+    //缓冲数据的条数
+    cacheCount: {
         type: Number,
-        default: 1
+        default: 5
     }
 })
 // 定义数据
 const state = reactive({
-    //可视区域高度
-    screenHeight: 0,
-    // 起始索引  默认:0  当前视口第一个数据在allData数组的索引位置
-    start: 0,
-    positions: null,
+    screenHeight: 0, //可视区域高度
+    start: 0, // 起始索引  默认:0  当前视口第一个数据在allData数组的索引位置
     allData: [], // 全部数据
     startOffset: 0, // 内容容器的y轴偏移量。当渲染区域第一个元素完全移到了可视区域之外时，重新计算startOffset，将第一个元素移回可视区域
-    pillarDomHeight: 0 // 用于撑开滚动容器的高度,allData最后一个元素的endPos值
+    pillarDomHeight: 0, // 用于撑开滚动容器的高度,allData最后一个元素的endPos值
+    contentListOffset: 0 //内容容器的y轴偏移量。当渲染区域第一个元素完全移到了可视区域之外时，需要重新计算contentListOffset，将第一个元素移动回可视区
 })
 
 let positionDataArr = [] // 用非响应式数据存储数据的高度和位置
@@ -85,29 +87,38 @@ const end = computed(() => {
         endPos++
         contentDomTotalHeight += tmpAllData[endPos].height
     }
-    // 因为数组的slice方法是包头不包尾的所以还需要endPos+1，
-    // 因为存在在某个元素位置开区间滚动的情况，此时该元素不会完全移出视口，onUpdated不会触发，但又使得视口多出了位置，因此要再+1，渲染下一个元素来占满视口区域
-    return endPos + 2
+    // 因为数组的slice方法是包头不包尾的所以还需要再endPos上+1，才会是预期的元素数量
+    endPos += 1
+    // 因为存在在某个元素位置开区间滚动的情况，此时该元素不会完全移出视口，但又使得视口多出了位置，因此要再+1，渲染下一个元素来占满视口区域
+    return endPos + 1
 })
 
 const styleTranslate = computed(() => {
-    return `transform:translate(0,${state.startOffset}px)`
+    return `transform:translate(0,${state.contentListOffset}px)`
 })
 
 // 当前视口需要显示的数据
 const renderData = computed(() => {
+    const _cacheCount = props.cacheCount
+    const realStart = Math.max(0, state.start - _cacheCount)
     // 避免最后一个元素的数组下标超出实际的数组长度
-    const realEnd = Math.min(end.value, state.allData.length)
-    return state.allData.slice(state.start, realEnd)
+    const realEnd = Math.min(end.value + _cacheCount, state.allData.length)
+    console.log(end.value, _cacheCount, realStart, realEnd)
+    return state.allData.slice(realStart, realEnd)
 })
 
 // 列表滚动触发
-const onScroll = (evt) => {
-    const scrollerContainerDom = evt.target
+const onScroll = (event) => {
+    // 如果处于修正scrollTop的状态，则不执行scroll回调
+    if (fixingScrollTop) return
+
+    const scrollerContainerDom = event.target
     if (!scrollerContainerDom) return
 
     const { scrollTop } = scrollerContainerDom // 首条数据的顶部与视口顶端之间的距离
-
+    // 正数或0表示向下滚动
+    isPositive = scrollTop - lastScrollTop >= 0
+    lastScrollTop = scrollTop
     let idx = 0
     const dataList = positionDataArr
     let dataItem = dataList[idx]
@@ -116,7 +127,34 @@ const onScroll = (evt) => {
         dataItem = dataList[idx]
     }
     state.start = idx
-    state.startOffset = positionDataArr[state.start].startPos
+
+    if (!isPositive) {
+        // 向上滚动则需要记录视口第一个元素底部位置与scrollTop之间的偏移量，用于onUpdate中修正scrollTop
+        state.startOffset = positionDataArr[state.start].endPos - scrollTop
+    } else {
+        state.startOffset = 0
+    }
+
+    const _cacheCount = props.cacheCount
+    const realStart = Math.max(0, state.start - _cacheCount)
+    state.contentListOffset = positionDataArr[realStart].startPos
+}
+
+const fixScrollTop = () => {
+    const scrollerContainerDom = listContainer.value
+    if (!scrollerContainerDom) return
+
+    // 视口第一个元素底部位置与视口顶部位置存在偏移量，且是向上滚动，则需要修正scrollTop值
+    if (state.startOffset > 0 && !isPositive) {
+        // 无论新增动态项的实际高度是比记录的高度高还是比记录的高度低，这里都将scrollTop的位置修正为视觉上视口顶部距离视口第一个元素底部有startOffset个间隔的位置
+        const newScrollTop =
+            positionDataArr[state.start].endPos - state.startOffset
+        fixingScrollTop = true
+        nextTick(() => {
+            scrollerContainerDom.scrollTo({ top: newScrollTop })
+            fixingScrollTop = false
+        })
+    }
 }
 
 const updateHeightAndPos = () => {
@@ -173,6 +211,8 @@ const updateHeightAndPos = () => {
         positionDataArr.length > 0
             ? positionDataArr[positionDataArr.length - 1].endPos
             : 0
+
+    fixScrollTop()
 }
 
 // DOM更新完毕，重新计算列表元素的位置和高度
